@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>OKX 量化回测工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        *{box-sizing:border-box;font-family:system-ui}
+        body{max-width:1200px;margin:20px auto;padding:0 20px;background:#1e1e1e;color:#eee}
+        .box{background:#2d2d2d;padding:20px;border-radius:10px;margin-bottom:20px}
+        input, select{padding:8px;font-size:16px;width:260px;background:#3c3c3c;border:1px solid #555;color:#fff;border-radius:4px}
+        button{padding:9px 20px;background:#007acc;color:#fff;border:none;border-radius:4px;font-size:16px;cursor:pointer}
+        button:disabled{background:#555;cursor:not-allowed}
+        .result{margin-top:15px}
+        table{border-collapse:collapse;width:100%;margin-top:10px}
+        td,th{border:1px solid #444;padding:10px}
+        canvas{width:100%;height:500px}
+        .row{margin:10px 0;}
+        .tip-small{color:#aaa;font-size:14px;}
+        /* 弹窗样式 */
+        .modal{
+            display:none;
+            position:fixed;
+            top:0;left:0;right:0;bottom:0;
+            background:rgba(0,0,0,0.7);
+            padding:30px;
+            overflow:auto;
+        }
+        .modal-content{
+            background:#2d2d2d;
+            padding:20px;
+            border-radius:8px;
+            max-width:1100px;
+            margin:0 auto;
+        }
+        .modal-close{
+            float:right;
+            background:#c53030;
+        }
+    </style>
+</head>
+<body>
+    <h2>OKX 量化回测｜锁仓策略</h2>
+    <div class="box">
+        <div class="row">
+            <label>交易对：</label>
+            <input id="symbol" placeholder="BTC/USDT" value="BTC/USDT">
+        </div>
+        <div class="row">
+            <label>K线周期：</label>
+            <select id="timeframe">
+                <option value="5m">5分钟</option>
+                <option value="15m">15分钟</option>
+                <option value="1h">1小时</option>
+                <option value="4h">4小时</option>
+                <option value="1d" selected>日线(1d)</option>
+            </select>
+        </div>
+        <div class="row">
+            <label>起始日期：</label>
+            <input id="startDate" type="date" value="2018-01-01">
+        </div>
+        <div class="row">
+            <label>策略1：下跌行情多单比例</label>
+            <input id="ratio1" type="number" step="0.01" min="0" max="1" value="0.3">
+            <span class="tip-small">（0~1之间）</span>
+        </div>
+        <div class="row">
+            <label>策略2：下跌行情多单比例</label>
+            <input id="ratio2" type="number" step="0.01" min="0" max="1" value="0.5">
+            <span class="tip-small">（0~1之间）</span>
+        </div>
+        <button id="runBtn">开始回测</button>
+        <button id="showLogBtn" disabled style="margin-left:10px;">查看交易记录</button>
+        <div id="tip" style="margin-top:10px;color:#aaa"></div>
+    </div>
+
+    <div class="box">
+        <h3>回测指标结果</h3>
+        <div id="metricBox"></div>
+    </div>
+    <div class="box">
+        <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- 交易记录弹窗 -->
+    <div class="modal" id="logModal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">关闭</button>
+            <h3>交易记录</h3>
+            <div style="margin:10px 0">
+                <label>选择策略：</label>
+                <select id="logStrategySel">
+                    <option value="1">策略1</option>
+                    <option value="2">策略2</option>
+                </select>
+            </div>
+            <div id="logTableBox"></div>
+        </div>
+    </div>
+
+<div id="live-panel" style="display:none; margin-top: 24px;">
+  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+    <div>
+      <h3>净值曲线</h3>
+      <canvas id="equity-chart" height="220" style="width:100%; background:#111; border-radius:8px;"></canvas>
+    </div>
+    <div>
+      <h3>成交记录</h3>
+      <div id="trade-table" style="max-height:260px; overflow:auto; font-size:12px;"></div>
+    </div>
+  </div>
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button id="btn-start">启动模拟盘</button>
+    <button id="btn-stop">停止</button>
+    <button id="btn-refresh">刷新数据</button>
+    <span id="live-status" style="margin-left:8px;"></span>
+  </div>
+</div>
+<script>
+let chart;
+let backtestResult = null;
+const btn = document.getElementById('runBtn');
+const showLogBtn = document.getElementById('showLogBtn');
+const tip = document.getElementById('tip');
+const metricBox = document.getElementById('metricBox');
+const logModal = document.getElementById('logModal');
+const closeModal = document.getElementById('closeModal');
+const logStrategySel = document.getElementById('logStrategySel');
+const logTableBox = document.getElementById('logTableBox');
+
+btn.onclick = async ()=>{
+    const symbol = document.getElementById('symbol').value.trim();
+    const startDate = document.getElementById('startDate').value;
+    const timeframe = document.getElementById('timeframe').value;
+    const ratio1 = parseFloat(document.getElementById('ratio1').value);
+    const ratio2 = parseFloat(document.getElementById('ratio2').value);
+
+    if(!symbol){
+        tip.textContent="请输入币种，例如 BTC/USDT";
+        return;
+    }
+    if(isNaN(ratio1) || ratio1 <0 || ratio1>1 || isNaN(ratio2) || ratio2 <0 || ratio2>1){
+        tip.textContent="❌ 多单比例必须是0~1之间小数";
+        return;
+    }
+    btn.disabled=true;
+    showLogBtn.disabled=true;
+    tip.textContent="正在拉取K线+回测，请稍等...";
+    metricBox.innerHTML="";
+    backtestResult = null;
+    try{
+        const res = await fetch("http://127.0.0.1:8000/run_backtest",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({symbol, start_date:startDate, timeframe, ratio1, ratio2})
+        })
+        const data = await res.json();
+        if(data.code!==0){
+            tip.textContent="❌ "+data.msg;
+            return;
+        }
+        backtestResult = data;
+        showLogBtn.disabled = false;
+        tip.textContent="✅ 回测完成，周期："+data.timeframe;
+        const m1 = data.metric1;
+        const m2 = data.metric2;
+        metricBox.innerHTML = `
+        <table>
+            <tr><th>策略</th><th>期末资产</th><th>最大回撤</th></tr>
+            <tr>
+                <td>下跌多单比例 ${data.p1}</td>
+                <td>${m1.final}</td>
+                <td>${(m1.max_drawdown*100).toFixed(2)}%</td>
+            </tr>
+            <tr>
+                <td>下跌多单比例 ${data.p2}</td>
+                <td>${m2.final}</td>
+                <td>${(m2.max_drawdown*100).toFixed(2)}%</td>
+            </tr>
+        </table>
+        `
+        //绘图
+        const ctx = document.getElementById('chartCanvas').getContext('2d');
+        if(chart) chart.destroy();
+        chart = new Chart(ctx,{
+            type:'line',
+            data:{
+                labels:data.dates,
+                datasets:[
+                    {label:`下跌多单比例 ${data.p1}`,data:data.equity1,borderColor:"#42A5F5",fill:false},
+                    {label:`下跌多单比例 ${data.p2}`,data:data.equity2,borderColor:"#FF9800",fill:false}
+                ]
+            },
+            options:{
+                responsive:true,
+                maintainAspectRatio:false,
+                scales:{
+                    x:{title:{display:true,text:"时间"}},
+                    y:{title:{display:true,text:"总资产"}}
+                }
+            }
+        })
+    }catch(err){
+        tip.textContent="❌ 请求后端失败，请检查后端是否启动";
+        console.error(err)
+    }finally{
+        btn.disabled=false;
+    }
+}
+
+//打开交易记录弹窗
+showLogBtn.onclick = ()=>{
+    logModal.style.display = "block";
+    renderLogTable();
+}
+//关闭弹窗
+closeModal.onclick = ()=>{
+    logModal.style.display = "none";
+}
+//切换策略渲染日志
+logStrategySel.onchange = renderLogTable;
+
+function renderLogTable(){
+    if(!backtestResult) return;
+    const sel = logStrategySel.value;
+    const logs = sel === "1" ? backtestResult.log1 : backtestResult.log2;
+    let html = `<table>
+    <tr><th>时间</th><th>交易类型</th><th>价格</th><th>仓位数量</th><th>交易后资金</th></tr>`;
+    logs.forEach(row=>{
+        html += `<tr>
+        <td>${row.time}</td>
+        <td>${row.type}</td>
+        <td>${row.price}</td>
+        <td>${row.size}</td>
+        <td>${row.capital_after}</td>
+        </tr>`
+    })
+    html += `</table>`;
+    logTableBox.innerHTML = html;
+}
+
+
+const API = "";
+
+async function fetchJSON(url) {
+  const r = await fetch(API + url);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+function drawEquity(series) {
+  const canvas = document.getElementById("equity-chart");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width = canvas.clientWidth * 2;
+  const H = canvas.height = 440;
+  ctx.clearRect(0, 0, W, H);
+  if (!series || series.length < 2) return;
+
+  const xs = series.map((_, i) => i);
+  const ys = series.map(s => s.equity);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const range = maxY - minY || 1;
+  const padX = 40, padY = 40;
+
+  ctx.strokeStyle = "#4f46e5";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ys.forEach((v, i) => {
+    const x = padX + (i / (ys.length - 1)) * (W - padX * 2);
+    const y = H - padY - ((v - minY) / range) * (H - padY * 2);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#aaa";
+  ctx.font = "24px sans-serif";
+  ctx.fillText(minY.toFixed(2), 4, H - padY);
+  ctx.fillText(maxY.toFixed(2), 4, padY);
+}
+
+function renderTrades(trades) {
+  const el = document.getElementById("trade-table");
+  if (!trades || !trades.length) {
+    el.innerHTML = "<div>暂无成交</div>";
+    return;
+  }
+  const rows = trades.map(t => `
+    <tr>
+      <td>${t.time}</td>
+      <td>${t.symbol}</td>
+      <td>${t.side}</td>
+      <td>${t.price}</td>
+      <td>${t.amount}</td>
+      <td>${t.pnl ?? "-"}</td>
+    </tr>
+  `).join("");
+  el.innerHTML = `
+    <table style="width:100%; border-collapse:collapse;">
+      <thead><tr style="text-align:left; color:#aaa;">
+        <th>时间</th><th>交易对</th><th>方向</th><th>价格</th><th>数量</th><th>盈亏</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function refreshLive() {
+  try {
+    const [status, snapshots, trades] = await Promise.all([
+      fetchJSON("/live/status"),
+      fetchJSON("/db/snapshots?limit=200"),
+      fetchJSON("/db/trades?limit=100"),
+    ]);
+    document.getElementById("live-status").textContent =
+      `状态: ${status.running ? "运行中" : "已停止"} | 净值: ${status.equity ?? "-"}`;
+    drawEquity(snapshots);
+    renderTrades(trades);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.getElementById("btn-start").onclick = () =>
+  fetch("/live/start", { method: "POST" }).then(refreshLive);
+
+document.getElementById("btn-stop").onclick = () =>
+  fetch("/live/stop", { method: "POST" }).then(refreshLive);
+
+document.getElementById("btn-refresh").onclick = refreshLive;
+
+// 页面加载后显示面板，并每 5 秒刷新一次
+document.getElementById("live-panel").style.display = "block";
+setInterval(refreshLive, 5000);
+refreshLive();
+</script>
+</body>
+</html>

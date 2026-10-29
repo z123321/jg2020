@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>现货多+杠杆空网格回测｜本地SQLite</title>
+    <style>
+        *{box-sizing:border-box;font-family:system-ui}
+        body{max-width:1200px;margin:20px auto;padding:0 16px;background:#f5f6f7}
+        .card{background:white;padding:16px 20px;border-radius:10px;margin-bottom:16px;box-shadow:0 1px 4px #00000015}
+        .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:10px}
+        label{display:block;margin-bottom:4px;font-size:14px;color:#333}
+        input,select{width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px}
+        button{padding:7px 12px;border:none;background:#2563eb;color:#fff;border-radius:6px;cursor:pointer;margin:0 2px}
+        button:disabled{background:#94a3b8;cursor:not-allowed}
+        .btn-export{background:#10b981;}
+        .info{color:#22c55e;font-weight:bold}
+        .err{color:#ef4444}
+        table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+        th,td{border:1px solid #eee;padding:7px;text-align:center}
+        th{background:#f8fafc}
+        #imgBox img{max-width:100%;border-radius:8px}
+    </style>
+</head>
+<body>
+    <h2>现货多头（无杠杆）+杠杆做空网格回测【本地SQLite数据源】</h2>
+    <div class="card">
+        <div class="row">
+            <div>
+                <label>交易对（和库内一致，例 BTC/USDT）</label>
+                <input id="symbol" value="BTC/USDT">
+            </div>
+            <div>
+                <label>K线周期（库内值，例1d /4h /1h）</label>
+                <input id="tf" value="1d">
+            </div>
+            <div>
+                <label>起始日期</label>
+                <input id="startDate" value="2022-01-01">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label>网格间距(小数)</label>
+                <input id="gap" type="number" step="0.001" value="0.025">
+            </div>
+            <div>
+                <label>杠杆倍数（做空部分）</label>
+                <input id="lev" type="number" step="0.1" value="1.5">
+            </div>
+            <div>
+                <label>现货资金占总本金比例</label>
+                <input id="longRatio" type="number" step="0.01" value="0.35">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label>空单止损比例</label>
+                <input id="sl" type="number" step="0.01" value="0.04">
+            </div>
+            <div>
+                <label>初始本金</label>
+                <input id="cap" type="number" value="10000">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+                <button id="runBtn">开始回测</button>
+            </div>
+        </div>
+        <div id="msg"></div>
+    </div>
+
+    <div class="card">
+        <h4>回测指标</h4>
+        <div id="metric"></div>
+        <div id="imgBox"></div>
+    </div>
+
+    <div class="card">
+        <h4>历史任务列表</h4>
+        <button id="loadTask">刷新任务</button>
+        <div id="taskList"></div>
+    </div>
+
+    <div class="card">
+        <h4>交易明细</h4>
+        <div id="tradeTable"></div>
+    </div>
+
+<script>
+const api = "http://127.0.0.1:8000";
+const msgEl = document.getElementById("msg");
+const runBtn = document.getElementById("runBtn");
+
+function showMsg(txt, isErr=false){
+    msgEl.innerHTML = `<span class="${isErr?'err':'info'}">${txt}</span>`
+}
+
+runBtn.onclick = async ()=>{
+    runBtn.disabled=true;
+    showMsg("正在读取本地K线并回测，请稍等...");
+    try{
+        const payload = {
+            symbol: document.getElementById("symbol").value.trim(),
+            timeframe: document.getElementById("tf").value.trim(),
+            start_date: document.getElementById("startDate").value,
+            grid_gap: Number(document.getElementById("gap").value),
+            leverage: Number(document.getElementById("lev").value),
+            long_ratio: Number(document.getElementById("longRatio").value),
+            stop_loss_pct: Number(document.getElementById("sl").value),
+            init_capital: Number(document.getElementById("cap").value)
+        }
+        const resp = await fetch(api+"/run_backtest",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        console.log("后端返回：", data);
+
+        if(data.detail){
+            showMsg("❌回测失败：" + data.detail, true);
+            return;
+        }
+
+        showMsg(`✅回测完成，任务ID:${data.task_id}`);
+        document.getElementById("metric").innerHTML = `
+            <p>期末权益：${data.final_equity.toFixed(2)} | 总收益：${data.return_pct.toFixed(2)}% | 最大回撤：${data.max_drawdown.toFixed(2)}%</p>
+        `
+        document.getElementById("imgBox").innerHTML = `<img src="data:image/png;base64,${data.img_base64}">`
+        loadTaskList();
+    }catch(e){
+        console.error(e);
+        showMsg("请求异常："+e.message, true);
+    }finally{
+        runBtn.disabled=false;
+    }
+}
+
+async function loadTaskList(){
+    const res = await fetch(api+"/task_list");
+    const list = await res.json();
+    let html = `<table><tr><th>ID</th><th>币种</th><th>周期</th><th>收益%</th><th>最大回撤%</th><th>创建时间</th><th>操作</th></tr>`
+    list.forEach(t=>{
+        html += `<tr>
+            <td>${t.id}</td>
+            <td>${t.symbol}</td>
+            <td>${t.timeframe}</td>
+            <td>${t.return_pct.toFixed(2)}</td>
+            <td>${t.max_dd.toFixed(2)}</td>
+            <td>${t.create_time}</td>
+            <td>
+                <button onclick="viewTrades(${t.id})">查看成交</button>
+                <button class="btn-export" onclick="exportCsv(${t.id})">导出CSV</button>
+            </td>
+        </tr>`
+    })
+    html += `</table>`
+    document.getElementById("taskList").innerHTML = html;
+}
+
+window.viewTrades = async function(tid){
+    const res = await fetch(api+`/task_trades/${tid}`);
+    const trades = await res.json();
+    let html = `<table><tr>
+        <th>时间</th><th>方向</th><th>价格</th><th>数量</th><th>盈亏</th><th>现货现金</th><th>现货持仓</th><th>做空现金</th><th>空单仓位</th>
+    </tr>`
+    trades.forEach(t=>{
+        html += `<tr>
+            <td>${t.dt}</td>
+            <td>${t.side}</td>
+            <td>${Number(t.price).toFixed(4)}</td>
+            <td>${Number(t.qty).toFixed(6)}</td>
+            <td>${Number(t.pnl).toFixed(2)}</td>
+            <td>${Number(t.cash_spot).toFixed(2)}</td>
+            <td>${Number(t.spot_amount).toFixed(4)}</td>
+            <td>${Number(t.cash_short).toFixed(2)}</td>
+            <td>${Number(t.short_size).toFixed(4)}</td>
+        </tr>`
+    })
+    html += `</table>`
+    document.getElementById("tradeTable").innerHTML = html;
+}
+
+window.exportCsv = function(tid){
+    const a = document.createElement('a');
+    a.href = `${api}/export_csv/${tid}`;
+    a.download = `task_${tid}_trade.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+document.getElementById("loadTask").onclick = loadTaskList;
+loadTaskList();
+</script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>量化面板</title>
+    <style>
+        body { font-family: system-ui, sans-serif; padding: 24px; background: #f5f7fa; }
+        .card { background: #fff; padding: 16px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        button { padding: 8px 16px; border-radius: 8px; border: none; background: #1677ff; color: #fff; cursor: pointer; margin-right: 8px; }
+        button.stop { background: #ff4d4f; }
+        #chart { width: 100%; height: 320px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <h2>量化回测 / 模拟盘面板</h2>
+
+    <div class="card">
+        <button onclick="startLive()">启动模拟盘</button>
+        <button class="stop" onclick="stopLive()">停止模拟盘</button>
+        <button onclick="refreshStatus()">刷新状态</button>
+        <span id="status" style="margin-left:12px;">-</span>
+    </div>
+
+    <div class="card">
+        <h3>净值曲线</h3>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>最新快照</h3>
+        <table id="snapshotTable">
+            <thead><tr><th>时间</th><th>标的</th><th>收盘价</th><th>净值</th><th>信号</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>成交记录</h3>
+        <table id="tradeTable">
+            <thead><tr><th>时间</th><th>标的</th><th>方向</th><th>价格</th><th>数量</th><th>盈亏</th><th>净值</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        const API = "";
+
+        async function refreshStatus() {
+            const r = await fetch(API + "/live/status");
+            const d = await r.json();
+            document.getElementById("status").textContent = d.running ? "运行中" : "未运行";
+        }
+
+        async function startLive() {
+            const r = await fetch(API + "/live/start", { method: "POST" });
+            const d = await r.json();
+            alert(JSON.stringify(d));
+            refreshStatus();
+        }
+
+        async function stopLive() {
+            const r = await fetch(API + "/live/stop", { method: "POST" });
+            const d = await r.json();
+            alert(JSON.stringify(d));
+            refreshStatus();
+        }
+
+        let chart;
+
+        async function refreshSnapshots() {
+            const r = await fetch(API + "/db/snapshots?limit=200");
+            const data = (await r.json()).reverse();
+
+            const tbody = document.querySelector("#snapshotTable tbody");
+            tbody.innerHTML = "";
+            for (const s of data.slice(-20).reverse()) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `<td>${s.time}</td><td>${s.symbol}</td><td>${s.close}</td><td>${s.equity}</td><td>${s.signal}</td>`;
+                tbody.appendChild(tr);
+            }
+
+            const labels = data.map(s => s.time.slice(11, 19));
+            const values = data.map(s => s.equity);
+
+            if (!chart) {
+                chart = new Chart(document.getElementById("chart"), {
+                    type: "line",
+                    data: { labels, datasets: [{ label: "equity", data: values, tension: 0.2 }] }
+                });
+            } else {
+                chart.data.labels = labels;
+                chart.data.datasets[0].data = values;
+                chart.update();
+            }
+        }
+
+        async function refreshTrades() {
+            const r = await fetch(API + "/db/trades?limit=50");
+            const data = await r.json();
+            const tbody = document.querySelector("#tradeTable tbody");
+            tbody.innerHTML = "";
+            for (const t of data) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `<td>${t.time}</td><td>${t.symbol}</td><td>${t.side}</td><td>${t.price}</td><td>${t.size}</td><td>${t.pnl}</td><td>${t.equity}</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        refreshStatus();
+        refreshSnapshots();
+        refreshTrades();
+        setInterval(refreshSnapshots, 10000);
+        setInterval(refreshTrades, 10000);
+        setInterval(refreshStatus, 5000);
+    </script>
+</body>
+</html>

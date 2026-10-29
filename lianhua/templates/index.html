@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化策略监控面板</title>
+    <!-- 引入 Chart.js 核心库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 【新增】引入 Hammer.js (Chart.js 缩放插件的依赖) -->
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <!-- 【新增】引入 Chart.js 缩放插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            background-color: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 12px;
+            color: #aaa;
+        }
+        input, select {
+            background-color: #0f3460;
+            border: 1px solid #1a1a40;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            outline: none;
+        }
+        button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.3s;
+            height: 40px;
+            margin-top: 15px;
+        }
+        button:hover { opacity: 0.8; }
+        #startBtn { background-color: #4e9af1; color: #fff; }
+        #stopBtn { background-color: #e74c3c; color: #fff; }
+        #statusBtn { background-color: #34495e; color: #fff; }
+
+        .chart-container {
+            background-color: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .status-bar {
+            background-color: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .status-item {
+            margin-right: 20px;
+        }
+        .status-running { color: #2ecc71; }
+        .status-stopped { color: #e74c3c; }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #1a1a40;
+            font-size: 13px;
+        }
+        .data-table th {
+            background-color: #0f3460;
+            color: #4e9af1;
+        }
+        .data-table tr:hover {
+            background-color: #1a1a40;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>量化策略监控面板</h1>
+        
+        <!-- 控制面板 -->
+        <div class="control-panel">
+            <div class="input-group">
+                <label>交易对</label>
+                <input type="text" id="symbolInput" value="BTC/USDT">
+            </div>
+            <div class="input-group">
+                <label>K线周期(秒)</label>
+                <input type="number" id="timeframeInput" value="3">
+            </div>
+
+            <!-- 策略下拉选择框 -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="color: #ccc; font-size: 14px;">切换策略：</label>
+                    <select id="strategy-select" onchange="changeStrategy()" 
+                    style="background-color: #1e293b; color: white; border: 1px solid #334155; border-radius: 4px; padding: 5px 10px;">
+                        <option value="grid">正在加载...</option>
+                    </select>
+            </div>
+
+            <div class="input-group">
+                <label>DRYRUN 模拟</label>
+                <input type="checkbox" id="simulatedInput" checked style="width: 20px; height: 20px;">
+            </div>
+            
+            <button id="startBtn">启动</button>
+            <button id="stopBtn">停止</button>
+            <button id="statusBtn">刷新状态</button>
+        </div>
+
+        <!-- 状态栏 -->
+        <div id="statusBar" class="status-bar">
+            <span class="status-item">状态: <span id="statusText">未连接</span></span>
+            <span class="status-item">上次信号: <span id="lastSignal">-</span></span>
+            <span class="status-item">当前净值: <span id="currentEquity">-</span></span>
+            <span class="status-item">当前价格: <span id="currentPrice">-</span></span>
+            <span class="status-item">更新时间: <span id="lastTime">-</span></span>
+        </div>
+
+        <!-- 净值走势图 -->
+        <div class="chart-container">
+            <canvas id="equityChart"></canvas>
+        </div>
+
+        <!-- 交易明细表格 -->
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>时间</th>
+                    <th>交易对</th>
+                    <th>平仓价</th>
+                    <th>净值</th>
+                    <th>信号</th>
+                </tr>
+            </thead>
+            <tbody id="snapshotsTable">
+                <!-- 动态填充 -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+       const API_BASE = 'http://127.0.0.1:8000';
+let equityChart;
+
+function initChart() {
+    const ctx = document.getElementById('equityChart').getContext('2d');
+    equityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '净值', data: [],
+                borderColor: '#2ecc71',
+                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                borderWidth: 2, fill: true, tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            scales: {
+                x: { grid: { color: '#2a2a4a' }, ticks: { color: '#888' } },
+                y: { grid: { color: '#2a2a4a' }, ticks: { color: '#888' } }
+            },
+            plugins: {
+                zoom: {
+                    pan: { enabled: true, mode: 'x' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                },
+                legend: { labels: { color: '#ccc' } }
+            }
+        }
+    });
+}
+
+// 刷新状态栏（兼容后端 running / mock_running 两种字段名）
+async function refreshStatus() {
+    try {
+        const res = await fetch(`${API_BASE}/live/status`);
+        const data = await res.json();
+        const running = data.running !== undefined ? data.running : data.mock_running;
+        document.getElementById('statusText').innerHTML = running
+            ? '<span class="status-running">运行中</span>'
+            : '<span class="status-stopped">已停止</span>';
+        document.getElementById('lastSignal').innerText = data.last_signal || '-';
+        document.getElementById('currentEquity').innerText = data.equity ?? '-';
+        document.getElementById('currentPrice').innerText = data.current_price ?? '-';
+        document.getElementById('lastTime').innerText = data.time || '-';
+    } catch (e) {
+        console.error("获取状态失败", e);
+    }
+}
+
+async function refreshSnapshots() {
+    try {
+        const res = await fetch(`${API_BASE}/db/snapshots?limit=1000&offset=0`);
+        const data = await res.json();
+        if (!equityChart) return;               // 图表没初始化就跳过，防崩
+        const labels = data.map(i => i.time);
+        const equities = data.map(i => i.equity);
+        equityChart.data.labels = labels;
+        equityChart.data.datasets[0].data = equities;
+        equityChart.update();
+
+        const tbody = document.getElementById('snapshotsTable');
+        tbody.innerHTML = '';
+        const tableData = data.slice(-50).reverse();
+        tableData.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.time}</td>
+                <td>${item.symbol}</td>
+                <td>${item.close}</td>
+                <td>${Number(item.equity).toFixed(2)}</td>
+                <td style="color:${item.signal === 'BUY' ? '#2ecc71' : '#e74c3c'}">${item.signal}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("获取快照数据失败", e);
+    }
+}
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+    const payload = {
+        symbol: document.getElementById('symbolInput').value,
+        timeframe: parseInt(document.getElementById('timeframeInput').value),
+        simulated: document.getElementById('simulatedInput').checked
+    };
+    try {
+        await fetch(`${API_BASE}/live/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        alert("策略已启动"); refreshStatus();
+    } catch (e) { alert("启动失败: " + e.message); }
+});
+
+document.getElementById('stopBtn').addEventListener('click', async () => {
+    try {
+        await fetch(`${API_BASE}/live/stop`, { method: 'POST' });
+        alert("策略已停止"); refreshStatus();
+    } catch (e) { alert("停止失败: " + e.message); }
+});
+
+document.getElementById('statusBtn').addEventListener('click', () => {
+    refreshStatus(); refreshSnapshots();
+});
+
+// 策略下拉：兼容后端返回裸数组 或 {data:[], active_key}
+async function loadStrategies() {
+    const response = await fetch(`${API_BASE}/live/get_strategies`);
+    const data = await response.json();
+    const list = Array.isArray(data) ? data : (data.data || []);
+    const active = (!Array.isArray(data) && data.active_key) ? data.active_key : null;
+    const select = document.getElementById('strategy-select');
+    select.innerHTML = '';
+    list.forEach(strat => {
+        // 数组元素若是字符串（如 "GridStrategy"）直接当 key+name
+        const key  = (typeof strat === 'string') ? strat : strat.key;
+        const name = (typeof strat === 'string') ? strat : strat.name;
+        const option = document.createElement('option');
+        option.value = key; option.text = name;
+        if (key === active) option.selected = true;
+        select.appendChild(option);
+    });
+    select.onchange = changeStrategy;           // ← 补上事件绑定
+}
+
+async function changeStrategy() {
+    const selectedKey = document.getElementById('strategy-select').value;
+    const response = await fetch(`${API_BASE}/live/set_strategy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: selectedKey })
+    });
+    const resData = await response.json();
+    alert(resData.message || '已切换');
+}
+
+// ✅ 全文只保留这一个 window.onload，所有初始化在这里串起来
+window.onload = () => {
+    initChart();          // 必须先建图，否则 refreshSnapshots 会崩
+    loadStrategies();
+    refreshStatus();
+    refreshSnapshots();
+    setInterval(() => {   // 状态栏 3 秒一次
+        refreshStatus();
+        refreshSnapshots();
+    }, 3000);
+};
+    </script>
+</body>
+</html>
