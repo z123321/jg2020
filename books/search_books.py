@@ -11,7 +11,6 @@ SEARCH_URL = "https://openlibrary.org/search.json"
 DB_FILE = "books.db"
 BLACKLIST_FILE = "blacklist.txt"
 KEYWORDS_FILE = "keywords.txt"
-
 USE_PROXY = True
 PROXY_HTTP = "http://127.0.0.1:7890"
 PROXY_HTTPS = "http://127.0.0.1:7890"
