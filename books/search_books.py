@@ -6,7 +6,7 @@ import sqlite3
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-#11111
+
 SEARCH_URL = "https://openlibrary.org/search.json"
 DB_FILE = "books.db"
 BLACKLIST_FILE = "blacklist.txt"
