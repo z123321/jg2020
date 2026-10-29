@@ -6,7 +6,7 @@ import sqlite3
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-
+#11111
 SEARCH_URL = "https://openlibrary.org/search.json"
 DB_FILE = "books.db"
 BLACKLIST_FILE = "blacklist.txt"
@@ -15,7 +15,7 @@ KEYWORDS_FILE = "keywords.txt"
 USE_PROXY = True
 PROXY_HTTP = "http://127.0.0.1:7890"
 PROXY_HTTPS = "http://127.0.0.1:7890"
-
+TEST="TEXT"
 PUBLISHER_RANGES = [
     # O'Reilly
     ("O'Reilly 2000-2004", "978059600000", "978059600099"),
