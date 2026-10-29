@@ -14,7 +14,7 @@ KEYWORDS_FILE = "keywords.txt"
 USE_PROXY = True
 PROXY_HTTP = "http://127.0.0.1:7890"
 PROXY_HTTPS = "http://127.0.0.1:7890"
-TEST="TEXT"
+TEST="TEXTs"
 PUBLISHER_RANGES = [
     # O'Reilly
     ("O'Reilly 2000-2004", "978059600000", "978059600099"),
