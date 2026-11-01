@@ -9,6 +9,7 @@ people = [
 #for k in people:
     #if k["score"]>90:
         #print(k["name"])
+#333333333333333333
 nums=[23,78,65,43]
 for i in nums:
     print(nums[0])
