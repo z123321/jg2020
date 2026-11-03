@@ -127,7 +127,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?)
 
 def main():
     conn = init_db()
-    keywords = ['围城', '红楼梦','活着','西游记','三国演义']
+    keywords = []
+    try:
+        with open("keywords.txt", "r", encoding="utf-8") as f:
+            keywords = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("keywords.txt 不存在，使用默认关键词列表")
+        keywords = ['', '红楼 梦','活着','西游记','三国演义']
+
 
     all_records = []
     for kw in keywords:

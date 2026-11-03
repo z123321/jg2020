@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>二手书比价</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f4f5f7; color: #222; padding: 24px; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+
+  .search-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; background: #fff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .search-bar input, .search-bar select { padding: 9px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; }
+  .search-bar input[name=keyword] { flex: 1; min-width: 180px; }
+  .search-bar input[name=min], .search-bar input[name=max] { width: 90px; }
+  .search-bar button { padding: 9px 22px; border: none; border-radius: 6px; background: #4a7cff; color: #fff; font-size: 14px; cursor: pointer; }
+  .search-bar button:hover { background: #3a6aee; }
+
+  .stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 120px; background: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .stat-card .num { font-size: 22px; font-weight: 700; color: #4a7cff; }
+  .stat-card .label { font-size: 12px; color: #999; margin-top: 4px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  th, td { padding: 12px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  th { background: #fafafa; color: #666; font-weight: 600; }
+  tr:hover { background: #f9fbff; }
+  td.price { font-weight: 700; color: #e4393c; white-space: nowrap; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; background:#eef2ff; color:#4a7cff; }
+  .empty { text-align:center; color:#aaa; padding:40px; }
+  .loading { text-align:center; color:#888; padding:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📚 二手书比价</h1>
+  <div class="sub">数据源：孔夫子旧书网 · 后端：Node.js + SQLite</div>
+
+  <form class="search-bar" id="form">
+    <input name="keyword" placeholder="输入书名，如 围城 / 红楼梦" required>
+    <input name="min" type="number" placeholder="最低价">
+    <input name="max" type="number" placeholder="最高价">
+    <select name="sort">
+      <option value="price">价格 低→高</option>
+      <option value="price_desc">价格 高→低</option>
+      <option value="time">最新抓取</option>
+    </select>
+    <button type="submit">搜索</button>
+  </form>
+
+  <div class="stats" id="stats" style="display:none">
+    <div class="stat-card"><div class="num" id="s-count">-</div><div class="label">在售数量</div></div>
+    <div class="stat-card"><div class="num" id="s-min">-</div><div class="label">最低价 ¥</div></div>
+    <div class="stat-card"><div class="num" id="s-max">-</div><div class="label">最高价 ¥</div></div>
+    <div class="stat-card"><div class="num" id="s-avg">-</div><div class="label">均价 ¥</div></div>
+  </div>
+
+  <div id="result"></div>
+</div>
+<script>
+const API = 'http://127.0.0.1:3000'; // 确保这里和后端一致
+
+// 抽出来公共渲染函数，搜索 / 首页加载都调用它
+function renderList(items) {
+    const resultDiv = document.getElementById('result');
+    document.getElementById('stats').style.display = 'none';
+
+    if (items.length === 0) {
+        resultDiv.innerHTML = '<div class="empty">未找到相关书籍</div>';
+        return;
+    }
+
+    let html = '<table><thead><tr><th>书名</th><th>作者</th><th>价格</th><th>品相</th></tr></thead><tbody>';
+    items.forEach(item => {
+        html += `<tr>
+            <td><a href="${item.shop_url}" target="_blank">${item.title}</a></td>
+            <td>${item.author}</td>
+            <td class="price">¥${item.price}</td>
+            <td>${item.condition}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    resultDiv.innerHTML = html;
+}
+
+// 页面加载完成，自动请求首页默认数据
+window.onload = async function () {
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '<div class="loading">加载书籍列表...</div>';
+    try {
+        const res = await fetch(`${API}/api/home`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        console.log('首页默认数据：', data);
+        renderList(data.items);
+    } catch (err) {
+        console.error('首页加载失败：', err);
+        resultDiv.innerHTML = `<div class="empty">加载失败: ${err.message}</div>`;
+    }
+};
+
+// 原来的搜索提交事件
+document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const kw = document.querySelector('input[name=keyword]').value.trim();
+    if (!kw) return alert('请输入书名！');
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '<div class="loading">正在搜索...</div>';
+    document.getElementById('stats').style.display = 'none';
+
+    try {
+        console.log('正在请求 API:', `${API}/api/search?keyword=${kw}`);
+
+        const res = await fetch(`${API}/api/search?keyword=${encodeURIComponent(kw)}`);
+
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const data = await res.json();
+        console.log('收到数据:', data);
+        // 直接调用公共渲染函数
+        renderList(data.items);
+
+    } catch (err) {
+        console.error('请求出错:', err);
+        resultDiv.innerHTML = `<div class="empty">请求失败: ${err.message}</div>`;
+    }
+});
+</script>
+
+</body>
+</html>

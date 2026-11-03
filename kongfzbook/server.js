@@ -37,6 +37,24 @@ app.get('/api/search', (req, res) => {
   res.json({ keyword, count: items.length, items });
 });
 
+
+app.get('/api/home', (req, res) => {
+  try {
+    const stmt = db.prepare(`
+      SELECT keyword, title, author, price, condition, seller, shop_url
+      FROM prices
+      ORDER BY rowid DESC
+      LIMIT 20
+    `);
+    const rows = stmt.all();
+    // 和搜索接口保持一样返回结构 {items:数组}
+    res.json({ items: rows });
+  } catch(e) {
+    console.error(e);
+    res.json({ items: [], msg:'查询失败' });
+  }
+});
+
 // 4. 统计接口
 app.get('/api/stats', (req, res) => {
   const { keyword } = req.query;
@@ -50,6 +68,8 @@ app.get('/api/stats', (req, res) => {
 
   res.json({ keyword, ...row });
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`\n=============================`);
