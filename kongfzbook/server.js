@@ -43,7 +43,7 @@ app.get('/api/home', (req, res) => {
     const stmt = db.prepare(`
       SELECT keyword, title, author, price, condition, seller, shop_url
       FROM prices
-      ORDER BY rowid DESC
+      ORDER BY  RANDOM()
       LIMIT 20
     `);
     const rows = stmt.all();
