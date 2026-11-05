@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>db_util 数据库工具库 使用文档</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",Segoe UI,Roboto,sans-serif;background:#f7f9fc;color:#333;line-height:1.6;padding:20px 24px;max-width:1100px;margin:0 auto}
+header{border-bottom:2px solid #2b78e4;padding-bottom:16px;margin-bottom:24px}
+h1{color:#1f4e96;font-size:28px}
+.subtitle{color:#666;margin-top:6px}
+.global-ctrl{margin-bottom:16px}
+.global-ctrl button{padding:6px 12px;margin-right:8px;border:1px solid #2b78e4;background:#fff;color:#2b78e4;border-radius:4px;cursor:pointer}
+.global-ctrl button:hover{background:#2b78e4;color:#fff}
+.toc{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:16px 20px;margin-bottom:24px}
+.toc h3{font-size:18px;margin-bottom:12px;color:#2b78e4}
+.toc ul{padding-left:22px}
+.toc li{margin:6px 0}
+.toc a{color:#2b78e4;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+section{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:20px 24px;margin-bottom:18px}
+h2{font-size:22px;color:#1f4e96;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+h3{font-size:18px;color:#2b78e4;margin:16px 0 10px}
+p{margin:10px 0}
+.warn{background:#fff3cd;border-left:4px solid #ffc107;padding:10px 14px;border-radius:4px;margin:12px 0}
+.danger{background:#f8d7da;border-left:4px solid #dc3545;padding:10px 14px;border-radius:4px;margin:12px 0}
+code{font-family:Consolas,Monaco,monospace;background:#f1f3f5;padding:2px 6px;border-radius:3px;color:#c22554}
+.pre-wrap{position:relative}
+pre{background:#212529;color:#e9ecef;padding:14px 16px;border-radius:6px;overflow-x:auto;margin:12px 0;font-size:14px;line-height:1.5}
+pre code{background:transparent;color:inherit;padding:0}
+.copy-btn{position:absolute;top:8px;right:8px;padding:4px 10px;font-size:12px;border:none;border-radius:4px;background:#495057;color:#fff;cursor:pointer}
+.copy-btn:hover{background:#6c757d}
+.copy-tip{position:absolute;top:8px;right:70px;color:#28a745;font-size:12px;display:none}
+ul,ol{padding-left:24px;margin:10px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0}
+th,td{border:1px solid #dee2e6;padding:10px 12px;text-align:left}
+th{background:#e9f1fc;color:#1f4e96}
+.toggle-btn{font-size:14px;color:#2b78e4;cursor:pointer;user-select:none}
+.content-body{transition:all 0.25s ease}
+.collapsed .content-body{display:none}
+footer{text-align:center;color:#888;font-size:14px;margin-top:30px}
+</style>
+</head>
+<body>
+<header>
+<h1>db_util 数据库工具库 使用文档</h1>
+<div class="subtitle">统一封装 MySQL / SQLite，接口一致，支持双向数据迁移｜适用于K线ohlcv时序数据项目</div>
+</header>
+
+<div class="global-ctrl">
+    <button id="expandAll">全部展开</button>
+    <button id="collapseAll">全部折叠</button>
+</div>
+
+<div class="toc">
+<h3>📋 目录</h3>
+<ul>
+<li><a href="#install">1. 依赖安装</a></li>
+<li><a href="#import">2. 导入模块</a></li>
+<li><a href="#config">3. 配置说明</a></li>
+<li><a href="#instance">4. 获取数据库实例</a></li>
+<li><a href="#api">5. API 方法说明</a></li>
+<li><a href="#migrate">6. 数据迁移 migrate_table</a></li>
+<li><a href="#pit">7. 常见坑与注意事项</a></li>
+<li><a href="#demo">8. 完整极简示例</a></li>
+</ul>
+</div>
+
+<section id="install" class="section-item">
+    <h2>1. 依赖安装 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <p>SQLite 为 Python 内置库，无需额外安装；MySQL 需要 pymysql</p>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>pip install pymysql</code></pre>
+        </div>
+    </div>
+</section>
+
+<section id="import" class="section-item">
+    <h2>2. 导入模块 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>from db_util import get_db_instance, migrate_table</code></pre>
+        </div>
+    </div>
+</section>
+
+<section id="config" class="section-item">
+    <h2>3. 配置说明 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <h3>MySQL 配置</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>cfg_mysql = {
+    "db_type": "mysql",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "你的密码",
+    "charset": "utf8mb4"  # 可选参数
+}</code></pre>
+        </div>
+        <p>MySQL 的 <code>db_name</code> 为数据库名称，例如 <code>crypto_db</code></p>
+
+        <h3>SQLite 配置</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>cfg_sqlite = {
+    "db_type": "sqlite"
+}</code></pre>
+        </div>
+        <p>SQLite 的 <code>db_name</code> 是数据库文件路径，例如 <code>./crypto_raw.db</code>，打开文件自动建库，不需要单独执行建库语句。</p>
+    </div>
+</section>
+
+<section id="instance" class="section-item">
+    <h2>4. 获取数据库实例（工厂方法） <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>db = get_db_instance(cfg_mysql)
+# 或者切换为sqlite
+db = get_db_instance(cfg_sqlite)</code></pre>
+        </div>
+        <p>拿到实例后，所有方法签名完全一致，切换数据库仅修改配置，业务代码无需改动。</p>
+    </div>
+</section>
+
+<section id="api" class="section-item">
+    <h2>5. API 方法说明 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <div class="danger">⚠️ 安全提醒：表名、字段名使用字符串拼接，<strong>仅限内部可控项目</strong>，不要直接接收外网原始输入；where 值使用参数绑定，防注入。</div>
+
+        <h3>5.1 create_database 创建数据库</h3>
+        <p>仅 MySQL 生效，SQLite 内部是空实现</p>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>db.create_database("crypto_db")</code></pre>
+        </div>
+
+        <h3>5.2 create_table 创建表</h3>
+        <p>参数：db_name、table_name、col_def 字段定义字典</p>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>ohlcv_table_def = {
+    "exchange": "VARCHAR(32) NOT NULL",
+    "symbol": "VARCHAR(32) NOT NULL",
+    "timeframe": "VARCHAR(16) NOT NULL",
+    "ts": "BIGINT NOT NULL",
+    "open": "DOUBLE",
+    "high": "DOUBLE",
+    "low": "DOUBLE",
+    "close": "DOUBLE",
+    "volume": "DOUBLE",
+    "PRIMARY KEY": "(exchange, symbol, timeframe, ts)"
+}
+db.create_table("crypto_db", "ohlcv", ohlcv_table_def)</code></pre>
+        </div>
+
+        <h3>5.3 insert_one 单条插入</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>row = {
+    "exchange":"okx",
+    "symbol":"BTC/USDT",
+    "timeframe":"1m",
+    "ts":1700000000000,
+    "open":40000,
+    "high":40100,
+    "low":39900,
+    "close":40050,
+    "volume":123.45
+}
+last_id = db.insert_one("crypto_db", "ohlcv", row)</code></pre>
+        </div>
+
+        <h3>5.4 insert_batch 批量插入（主键冲突会报错）</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>rows = [row1, row2, row3]
+cnt = db.insert_batch("crypto_db", "ohlcv", rows)</code></pre>
+        </div>
+
+        <h3>5.5 insert_duplicate 单条插入，主键冲突自动更新（K线同步推荐）</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>db.insert_duplicate("crypto_db", "ohlcv", row)</code></pre>
+        </div>
+
+        <h3>5.6 insert_batch_duplicate 批量插入，冲突更新（主力同步方法）</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>cnt = db.insert_batch_duplicate("crypto_db", "ohlcv", rows)</code></pre>
+        </div>
+
+        <h3>5.7 select 普通查询</h3>
+        <ul>
+            <li>cols：查询字段列表，None=全部字段</li>
+            <li>where：等值AND条件字典</li>
+            <li>order_by：排序字符串</li>
+            <li>limit：返回条数</li>
+        </ul>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>res = db.select(
+    db_name="crypto_db",
+    table_name="ohlcv",
+    cols=["ts","close"],
+    where={"exchange":"okx","symbol":"BTC/USDT"},
+    order_by="ts ASC",
+    limit=100
+)</code></pre>
+        </div>
+
+        <h3>5.8 select_page 分页查询</h3>
+        <p>返回结构：<code>{"total":总条数, "page":当前页, "page_size":每页大小, "list":数据数组}</code></p>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>res = db.select_page(
+    db_name="crypto_db",
+    table_name="ohlcv",
+    cols=["ts","open","close"],
+    where={"exchange":"okx","symbol":"BTC/USDT","timeframe":"1m"},
+    order_by="ts ASC",
+    page=1,
+    page_size=50
+)
+print(res["total"])
+print(res["list"])</code></pre>
+        </div>
+
+        <h3>5.9 update 更新数据</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>cnt = db.update(
+    db_name="crypto_db",
+    table_name="ohlcv",
+    set_data={"close":40080},
+    where={"ts":1700000000000}
+)</code></pre>
+        </div>
+
+        <h3>5.10 delete 删除数据</h3>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>cnt = db.delete(
+    db_name="crypto_db",
+    table_name="ohlcv",
+    where={"ts":1700000000000}
+)</code></pre>
+        </div>
+    </div>
+</section>
+
+<section id="migrate" class="section-item">
+    <h2>6. migrate_table 双向迁移（sqlite ↔ mysql） <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <div class="warn">迁移前目标表必须提前建好，字段、主键结构保持一致；分页读取，分批写入，不会撑爆内存；主键冲突自动更新，支持重复执行。</div>
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>src_cfg = {"db_type": "sqlite"}
+dst_cfg = {
+    "db_type": "mysql",
+    "host":"127.0.0.1",
+    "port":3306,
+    "user":"root",
+    "password":"xxx"
+}
+
+total = migrate_table(
+    source_cfg=src_cfg,
+    target_cfg=dst_cfg,
+    source_db_name="crypto_raw.db",
+    target_db_name="crypto_db",
+    table_name="ohlcv",
+    where={"exchange":"okx","symbol":"BTC/USDT","timeframe":"1m"},
+    page_size=2000
+)
+print(f"迁移总数：{total}")</code></pre>
+        </div>
+        <p>反向迁移 MySQL → SQLite，只需要交换 src_cfg 和 dst_cfg。page_size 推荐：2000 ~ 5000</p>
+    </div>
+</section>
+
+<section id="pit" class="section-item">
+    <h2>7. 常见坑说明 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <ul>
+            <li>SQLite 字段类型只是语法兼容，没有 MySQL 严格限制；冲突更新语法底层自动区分，上层不用关心。</li>
+            <li>where 条件目前只支持等值 AND 查询，不支持 &gt; &lt; OR IN 等复杂条件，复杂SQL需要自行扩展。</li>
+            <li>大量K线同步优先使用 <code>insert_batch_duplicate</code>，性能远高于循环单条写入。</li>
+            <li>分页查询 page 小于1会自动修正为1。</li>
+        </ul>
+    </div>
+</section>
+
+<section id="demo" class="section-item">
+    <h2>8. 完整极简示例 <span class="toggle-btn">[折叠]</span></h2>
+    <div class="content-body">
+        <div class="pre-wrap">
+            <button class="copy-btn">复制</button>
+            <span class="copy-tip">✓已复制</span>
+<pre><code>from db_util import get_db_instance
+
+cfg = {
+    "db_type": "sqlite"
+}
+db = get_db_instance(cfg)
+
+table_def = {
+    "exchange":"VARCHAR(32) NOT NULL",
+    "symbol":"VARCHAR(32) NOT NULL",
+    "ts":"BIGINT NOT NULL PRIMARY KEY",
+    "close":"DOUBLE"
+}
+db.create_table("test.db", "ohlcv", table_def)
+
+db.insert_duplicate("test.db", "ohlcv", {
+    "exchange":"okx",
+    "symbol":"BTC/USDT",
+    "ts":1700000000000,
+    "close":40000
+})
+
+data = db.select_page(
+    "test.db",
+    "ohlcv",
+    where={"symbol":"BTC/USDT"},
+    page=1,
+    page_size=10
+)
+print(data)</code></pre>
+        </div>
+    </div>
+</section>
+
+<footer>
+db_util 帮助文档 | 内部工具
+</footer>
+
+<script>
+// 单个折叠展开
+document.querySelectorAll('.toggle-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+        const section = btn.closest('.section-item');
+        if(section.classList.contains('collapsed')){
+            section.classList.remove('collapsed');
+            btn.innerText = '[折叠]';
+        }else{
+            section.classList.add('collapsed');
+            btn.innerText = '[展开]';
+        }
+    })
+})
+
+// 全部展开
+document.getElementById('expandAll').addEventListener('click',()=>{
+    document.querySelectorAll('.section-item').forEach(s=>{
+        s.classList.remove('collapsed');
+        s.querySelector('.toggle-btn').innerText = '[折叠]';
+    })
+})
+// 全部折叠
+document.getElementById('collapseAll').addEventListener('click',()=>{
+    document.querySelectorAll('.section-item').forEach(s=>{
+        s.classList.add('collapsed');
+        s.querySelector('.toggle-btn').innerText = '[展开]';
+    })
+})
+
+// 复制代码
+document.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.addEventListener('click',async ()=>{
+        const wrap = btn.closest('.pre-wrap');
+        const codeText = wrap.querySelector('pre code').innerText;
+        await navigator.clipboard.writeText(codeText);
+        const tip = wrap.querySelector('.copy-tip');
+        tip.style.display='inline';
+        setTimeout(()=>tip.style.display='none',1200);
+    })
+})
+</script>
+</body>
+</html>
