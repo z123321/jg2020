@@ -1,0 +1,96 @@
+已完成分析，共参考 12 篇资料
+给你一份 Ubuntu Server 入门常用的命令速查，你装完可以直接照着敲。123
+系统和更新
+bash
+
+编辑
+
+
+
+lsb_release -a              # 看 Ubuntu 版本
+uname -r                    # 看内核版本
+hostnamectl                 # 看主机名、系统信息
+uptime                      # 看运行时间和负载
+sudo apt update             # 刷新软件源
+sudo apt upgrade -y         # 升级软件包
+sudo apt install vim curl wget git -y   # 装常用工具
+sudo apt autoremove -y      # 清理多余依赖
+文件和目录
+bash
+
+编辑
+
+
+
+pwd                         # 当前目录
+ls -la                      # 列出文件，包括隐藏文件
+cd /var/log                 # 切换目录
+mkdir -p project/src        # 创建目录
+touch test.txt              # 创建空文件
+cp a.txt b.txt              # 复制
+mv old.txt new.txt          # 移动/重命名
+rm test.txt                 # 删除文件
+rm -rf dir                  # 删除目录，慎用
+cat /etc/os-release         # 查看文件内容
+tail -f /var/log/syslog     # 实时看日志
+权限和用户
+bash
+
+编辑
+
+
+
+sudo adduser dev            # 新建用户
+sudo usermod -aG sudo dev   # 加入 sudo 组
+sudo passwd dev             # 改密码
+chmod +x script.sh          # 给脚本加执行权限
+chmod 755 file              # 设置权限
+chown user:group file       # 改所有者
+进程和服务
+bash
+
+编辑
+
+
+
+top                         # 看进程和资源
+ps aux | grep nginx         # 查进程
+kill 1234                   # 结束进程
+sudo systemctl status ssh   # 看服务状态
+sudo systemctl start nginx  # 启动服务
+sudo systemctl stop nginx   # 停止服务
+sudo systemctl restart nginx# 重启服务
+sudo systemctl enable nginx # 开机自启
+网络和防火墙
+bash
+
+编辑
+
+
+
+ip a                        # 看 IP 地址
+ip route                    # 看路由
+ping baidu.com              # 测连通性
+ss -tulnp                   # 看监听端口
+sudo ufw status             # 看防火墙状态
+sudo ufw allow 22           # 放行 SSH
+sudo ufw enable             # 开启防火墙
+磁盘
+bash
+
+编辑
+
+
+
+df -h                       # 看磁盘空间
+du -sh /var/log             # 看目录大小
+lsblk                       # 看磁盘设备
+关机重启
+bash
+
+编辑
+
+
+
+sudo reboot                 # 重启
+sudo shutdown -h now        # 立即关机

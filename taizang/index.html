@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>车间台账【免费试用版】</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    const { createApp, ref, reactive, onMounted, computed } = Vue
+
+    createApp({
+      setup() {
+        const $message = ElementPlus.ElMessage
+        const $confirm = ElementPlus.ElMessageBox
+        const baseUrl = "http://127.0.0.1:5000/api"
+
+        const pageState = ref("login")
+
+        const loginForm = reactive({
+          username: "admin",
+          password: "admin123"
+        })
+
+        const tableData = ref([])
+        const total = ref(0)
+        const page = ref(1)
+        const pageSize = ref(10)
+        const searchWorkOrder = ref("")
+        const searchProductName = ref("")
+
+        const dialogVisible = ref(false)
+        const formTitle = ref("新增记录")
+        const formData = reactive({
+          id: null,
+          work_order: "",
+          product_name: "",
+          batch_no: "",
+          produce_date: "",
+          quantity: "",
+          operator: "",
+          remark: ""
+        })
+
+        async function handleLogin() {
+          try {
+            const res = await axios.post(`${baseUrl}/login`, loginForm)
+            $message.success(res.data.msg)
+            pageState.value = "main"
+            loadTableData()
+          } catch (err) {
+            $message.error(err.response?.data?.msg || "登录失败")
+          }
+        }
+
+        async function loadTableData() {
+          try {
+            const params = {
+              page: page.value,
+              page_size: pageSize.value
+            }
+            if(searchWorkOrder.value) params.work_order = searchWorkOrder.value
+            const res = await axios.get(`${baseUrl}/production`, { params })
+            tableData.value = res.data.list
+            total.value = res.data.total
+          } catch(err) {
+            $message.error("加载列表失败")
+          }
+        }
+
+        function handleSearch() {
+          page.value = 1
+          loadTableData()
+        }
+
+        function resetSearch() {
+          searchWorkOrder.value = ""
+          searchProductName.value = ""
+          page.value = 1
+          loadTableData()
+        }
+
+        function addRow() {
+          formTitle.value = "新增记录"
+          formData.id = null
+          formData.work_order = ""
+          formData.product_name = ""
+          formData.batch_no = ""
+          formData.produce_date = ""
+          formData.quantity = ""
+          formData.operator = ""
+          formData.remark = ""
+          dialogVisible.value = true
+        }
+
+        function editRow(row) {
+          formTitle.value = "编辑记录"
+          formData.id = row.id
+          formData.work_order = row.work_order
+          formData.product_name = row.product_name
+          formData.batch_no = row.batch_no
+          formData.produce_date = row.produce_date
+          formData.quantity = row.quantity
+          formData.operator = row.operator
+          formData.remark = row.remark
+          dialogVisible.value = true
+        }
+
+        function validateForm() {
+          if(!formData.work_order) {
+            $message.warning("工单编号不能为空")
+            return false
+          }
+          if(!formData.product_name) {
+            $message.warning("产品名称不能为空")
+            return false
+          }
+          if(!formData.quantity || isNaN(formData.quantity) || Number(formData.quantity) <= 0){
+            $message.warning("生产数量必须填写正整数")
+            return false
+          }
+          return true
+        }
+
+        async function saveForm() {
+          if(!validateForm()) return
+          try {
+            if(formData.id == null) {
+              await axios.post(`${baseUrl}/production`, formData)
+              $message.success("新增成功")
+            } else {
+              await axios.put(`${baseUrl}/production/${formData.id}`, formData)
+              $message.success("修改成功")
+            }
+            dialogVisible.value = false
+            loadTableData()
+          } catch(err) {
+            $message.error(err.response?.data?.msg || "操作失败")
+          }
+        }
+
+        function deleteRow(row) {
+          $confirm.confirm("确定删除这条记录吗？","提示",{type:"warning"})
+          .then(async ()=>{
+            await axios.delete(`${baseUrl}/production/${row.id}`)
+            $message.success("删除成功")
+            loadTableData()
+          }).catch(()=>{})
+        }
+
+        function clearAllRecord() {
+          $confirm.confirm("⚠️ 警告：将会删除所有台账记录，操作不可恢复！是否继续？","高危操作",{
+            type:"error",
+            confirmButtonText:"确认清空",
+            cancelButtonText:"取消"
+          }).then(async ()=>{
+            const list = [...tableData.value]
+            for(const item of list){
+              await axios.delete(`${baseUrl}/production/${item.id}`)
+            }
+            $message.success("全部记录已清空")
+            loadTableData()
+          }).catch(()=>{})
+        }
+
+        function exportExcel() {
+          window.open(`${baseUrl}/production/export`,"_blank")
+        }
+
+        function handlePageChange(p) {
+          page.value = p
+          loadTableData()
+        }
+
+        function showBusinessTip(name){
+          $message.info(`【${name}】为商业版功能，请联系购买商业版解锁`)
+        }
+
+        return {
+          pageState,
+          loginForm,
+          handleLogin,
+          tableData, total, page, pageSize, searchWorkOrder, searchProductName,
+          loadTableData, handleSearch, resetSearch,
+          addRow, editRow, deleteRow, dialogVisible, formTitle, formData, saveForm,
+          exportExcel, handlePageChange, clearAllRecord,
+          showBusinessTip
+        }
+      },
+      template:`
+        <div>
+          <div v-if="pageState === 'login'" style="width:400px;margin:100px auto;">
+            <el-card header="车间台账系统｜免费试用版">
+              <el-form>
+                <el-form-item label="账号">
+                  <el-input v-model="loginForm.username"></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input v-model="loginForm.password" type="password"></el-input>
+                </el-form-item>
+                <el-form-item>
+                  <el-button type="primary" @click="handleLogin">登录</el-button>
+                </el-form-item>
+              </el-form>
+            </el-card>
+          </div>
+
+          <div v-if="pageState === 'main'" style="padding:20px;">
+            <el-card>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3>生产台账管理</h3>
+                <div style="display:flex;gap:8px;">
+                  <el-button @click="showBusinessTip('不良品台账')">不良品台账</el-button>
+                  <el-button @click="showBusinessTip('产量统计报表')">产量统计</el-button>
+                  <el-button @click="showBusinessTip('Excel批量导入')">批量导入</el-button>
+                  <el-button @click="pageState='about'">关于系统</el-button>
+                </div>
+              </div>
+
+              <el-alert :title="\`当前记录：\${total} / 500 条\`" type="info" style="margin-bottom:16px;" />
+
+              <el-row :gutter="20">
+                <el-col :span="6">
+                  <el-input v-model="searchWorkOrder" placeholder="输入工单编号搜索"></el-input>
+                </el-col>
+                <el-col :span="6">
+                  <el-input v-model="searchProductName" placeholder="输入产品名称搜索"></el-input>
+                </el-col>
+                <el-col :span="6">
+                  <el-button type="primary" @click="handleSearch">搜索</el-button>
+                  <el-button @click="resetSearch">重置</el-button>
+                </el-col>
+              </el-row>
+
+              <div style="margin:16px 0;display:flex;gap:8px;">
+                <el-button type="success" @click="addRow">新增记录</el-button>
+                <el-button type="warning" @click="exportExcel">导出Excel</el-button>
+                <el-button type="danger" plain @click="clearAllRecord">一键清空全部</el-button>
+              </div>
+
+              <el-table :data="tableData" border style="width:100%">
+                <el-table-column prop="id" label="ID" width="60"></el-table-column>
+                <el-table-column prop="work_order" label="工单编号"></el-table-column>
+                <el-table-column prop="product_name" label="产品名称"></el-table-column>
+                <el-table-column prop="batch_no" label="批次号"></el-table-column>
+                <el-table-column prop="produce_date" label="生产日期"></el-table-column>
+                <el-table-column prop="quantity" label="数量"></el-table-column>
+                <el-table-column prop="operator" label="操作员"></el-table-column>
+                <el-table-column prop="remark" label="备注"></el-table-column>
+                <el-table-column prop="create_time" label="录入时间" width="180"></el-table-column>
+                <el-table-column label="操作" width="160">
+                  <template #default="scope">
+                    <el-button size="small" @click="editRow(scope.row)">编辑</el-button>
+                    <el-button size="small" type="danger" @click="deleteRow(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <el-pagination
+                style="margin-top:16px;text-align:right;"
+                @current-change="handlePageChange"
+                :current-page="page"
+                :page-size="pageSize"
+                layout="total, prev, pager, next"
+                :total="total">
+              </el-pagination>
+            </el-card>
+
+            <el-dialog v-model="dialogVisible" :title="formTitle" width="600px">
+              <el-form label-width="100px">
+                <el-form-item label="工单编号">
+                  <el-input v-model="formData.work_order"></el-input>
+                </el-form-item>
+                <el-form-item label="产品名称">
+                  <el-input v-model="formData.product_name"></el-input>
+                </el-form-item>
+                <el-form-item label="批次号">
+                  <el-input v-model="formData.batch_no"></el-input>
+                </el-form-item>
+                <el-form-item label="生产日期">
+                  <el-date-picker v-model="formData.produce_date" type="date" placeholder="选择日期" format="YYYY-MM-DD" value-format="YYYY-MM-DD" style="width:100%;"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="生产数量">
+                  <el-input v-model="formData.quantity"></el-input>
+                </el-form-item>
+                <el-form-item label="操作员">
+                  <el-input v-model="formData.operator"></el-input>
+                </el-form-item>
+                <el-form-item label="备注">
+                  <el-input v-model="formData.remark" type="textarea"></el-input>
+                </el-form-item>
+              </el-form>
+              <template #footer>
+                <span class="dialog-footer">
+                  <el-button @click="dialogVisible = false">取消</el-button>
+                  <el-button type="primary" @click="saveForm">保存</el-button>
+                </span>
+              </template>
+            </el-dialog>
+          </div>
+
+          <div v-if="pageState === 'about'" style="padding:20px;">
+            <el-card header="关于本系统【免费试用版】">
+              <div style="line-height:1.8;">
+                <p>车间台账系统 - 免费试用版</p>
+                <p>✅ 功能：生产记录录入、查询、编辑、删除、Excel导出</p>
+                <p>⚠️ 限制：最多保存500条记录，仅支持单账号使用</p>
+                <p>📜 试用协议：</p>
+                <p>1. 本版本仅供评估试用，<strong>不提供任何技术支持、远程协助、问题答疑</strong></p>
+                <p>2. 禁止二次分发、提取源码、修改后用于商业售卖</p>
+                <p>3. 数据由使用者自行备份，开发者不承担任何数据丢失责任</p>
+                <p>4. 如需无数据上限、多账号、不良品台账、统计报表、批量导入等功能，请咨询商业版</p>
+                <br>
+                <el-button @click="pageState='main'">返回台账</el-button>
+              </div>
+            </el-card>
+          </div>
+        </div>
+      `
+    }).use(ElementPlus).mount('#app')
+  </script>
+</body>
+</html>

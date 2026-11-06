@@ -134,8 +134,8 @@ def main():
     except FileNotFoundError:
         print("keywords.txt 不存在，使用默认关键词列表")
         keywords = ['', '红楼 梦','活着','西游记','三国演义']
-
-
+    print(f"本次待爬关键词：{keywords}")
+    
     all_records = []
     for kw in keywords:
         records = scrape_kongfz(kw, delay=5)
